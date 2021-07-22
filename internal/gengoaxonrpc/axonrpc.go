@@ -229,7 +229,7 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 
 		g.P("func ", hname, "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", input []byte) ([]byte, error) {")
 		g.P("in := new(", method.Input.GoIdent, ")")
-		g.P("msh := ", axonRPCPackage.Ident("Marshaler{}"), "")
+		g.P("msh := ", msgpackPackage.Ident("Marshaler{}"), "")
 
 		g.P("if err := msh.Unmarshal(input, in); err != nil { return nil, err }")
 
