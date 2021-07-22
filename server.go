@@ -3,7 +3,8 @@ package axonrpc
 import (
 	"context"
 	"fmt"
-	"github.com/Just4Ease/axon"
+	"github.com/Just4Ease/axon/v2"
+	"github.com/Just4Ease/axon/v2/messages"
 	"log"
 	"reflect"
 )
@@ -66,7 +67,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 		serviceImpl: ss,
 		methods:     make(map[string]*MethodDesc),
 		//streams:     make(map[string]*StreamDesc),
-		mdata:       sd.Metadata,
+		mdata: sd.Metadata,
 	}
 	for i := range sd.Methods {
 		d := &sd.Methods[i]
@@ -94,13 +95,20 @@ func (s *Server) Serve() error {
 		for methodName, method := range svc.methods {
 			m := method
 			endpoint := fmt.Sprintf("%s.%s", serviceName, methodName)
-			log.Printf("axonRPC endpoint registration: %s", endpoint)
-			fn := func() error {
-				return s.conn.Reply(endpoint, func(input []byte) ([]byte, error) {
-					return m.Handler(svc.serviceImpl, s.serveContext, input)
+			log.Printf("AxonRPC endpoint registration: %s", endpoint)
+			handlers = append(handlers, func() error {
+				return s.conn.Reply(endpoint, func(mg *messages.Message) (*messages.Message, error) {
+					result, err := m.Handler(svc.serviceImpl, s.serveContext, mg.Body)
+					if err != nil {
+						return nil, err
+					}
+
+					msg := messages.NewMessage()
+					msg.WithBody(result)
+					msg.WithSubject(endpoint)
+					return msg, nil
 				})
-			}
-			handlers = append(handlers, fn)
+			})
 		}
 	}
 	s.serve = true
