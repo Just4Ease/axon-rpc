@@ -18,7 +18,7 @@ import (
 const (
 	contextPackage = protogen.GoImportPath("context")
 	axonRPCPackage = protogen.GoImportPath("github.com/Just4Ease/axonrpc")
-	jsonPackage    = protogen.GoImportPath("encoding/json")
+	msgpackPackage    = protogen.GoImportPath("github.com/Just4Ease/axon/v2/codec/msgpack")
 	codesPackage   = protogen.GoImportPath("google.golang.org/grpc/codes")
 	statusPackage  = protogen.GoImportPath("google.golang.org/grpc/status")
 )
@@ -229,12 +229,13 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 
 		g.P("func ", hname, "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", input []byte) ([]byte, error) {")
 		g.P("in := new(", method.Input.GoIdent, ")")
+		g.P("msh := ", axonRPCPackage.Ident("Marshaler{}"), "")
 
-		g.P("if err := ", axonRPCPackage.Ident("UnPack(input, in)"), "; err != nil { return nil, err }")
+		g.P("if err := msh.Unmarshal(input, in); err != nil { return nil, err }")
 
 		g.P("reply, err := srv.(", service.GoName, "Server).", method.GoName, "(ctx, in)")
 		g.P("if err != nil { return nil, err }")
-		g.P("return ", jsonPackage.Ident("Marshal(reply)"))
+		g.P("return msh.Marshal(reply)")
 		g.P("}")
 		g.P()
 		return hname

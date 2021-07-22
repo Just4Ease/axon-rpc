@@ -7,6 +7,7 @@ import (
 	"github.com/Just4Ease/axon/v2/messages"
 	"log"
 	"reflect"
+	"time"
 )
 
 type Server struct {
@@ -90,29 +91,31 @@ type tendonisServerInterface interface {
 }
 
 func (s *Server) Serve() error {
-	handlers := make([]axon.EventHandler, 0)
+	handlers := make([]requestHandler, 0)
 	for serviceName, svc := range s.services {
 		for methodName, method := range svc.methods {
 			m := method
 			endpoint := fmt.Sprintf("%s.%s", serviceName, methodName)
-			log.Printf("AxonRPC endpoint registration: %s", endpoint)
-			handlers = append(handlers, func() error {
+			fmt.Printf("AxonRPC endpoint: %s\n", endpoint)
+			handler := func() error {
 				return s.conn.Reply(endpoint, func(mg *messages.Message) (*messages.Message, error) {
 					result, err := m.Handler(svc.serviceImpl, s.serveContext, mg.Body)
 					if err != nil {
 						return nil, err
 					}
-
 					msg := messages.NewMessage()
 					msg.WithBody(result)
 					msg.WithSubject(endpoint)
 					return msg, nil
 				})
-			})
+			}
+
+			handlers = append(handlers, handler)
 		}
 	}
+
 	s.serve = true
-	s.conn.Run(s.serveContext, handlers...)
+	s.runServer(s.serveContext, handlers...)
 	return nil
 }
 
@@ -122,4 +125,23 @@ func (s *Server) Stop() {
 
 func (s *Server) GracefulStop() {
 	s.serveContext.Done()
+}
+
+type requestHandler func() error
+
+func (r requestHandler) Run() {
+trigger:
+	if err := r(); err != nil {
+		log.Printf("response handler registration failed: %v. Retrying in 3 seconds...\n", err)
+		time.Sleep(3 * time.Second)
+		goto trigger
+	}
+}
+
+func (s *Server) runServer(ctx context.Context, handlers ...requestHandler) {
+	for _, handler := range handlers {
+		go handler.Run()
+	}
+
+	<-ctx.Done()
 }
